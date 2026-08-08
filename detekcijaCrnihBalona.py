@@ -87,7 +87,7 @@ def spojiDetekcije(contours1, contours2):
         if perimeter == 0:
             continue
         circularity = 4 * np.pi * (area / (perimeter ** 2))
-        if circularity > 0.4:
+        if circularity > 0.1:
             boxes1.append(cv2.boundingRect(c))
 
     boxes2 = []
@@ -121,11 +121,19 @@ while True:
     ret, img = cap.read()
     if not ret:
         break
-    corrected = gamma_correction(img, gamma=1)
+    corrected = gamma_correction(img, gamma=1.5)
     cv2.imshow("corrected", corrected)
 
-    contours1 = nadjiCrno(corrected)
-    contours2 = nadjiKonture(corrected)
+    hsv = cv2.cvtColor(corrected, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16, 16))
+    v_clahe = clahe.apply(v)
+    hsv_clahe = cv2.merge([h, s, v_clahe])
+    bgr_clahe = cv2.cvtColor(hsv_clahe, cv2.COLOR_HSV2BGR)
+    cv2.imshow("clahe", bgr_clahe)
+
+    contours1 = nadjiCrno(bgr_clahe)
+    contours2 = nadjiKonture(bgr_clahe)
 
     potvrdjeneDetekcije, boxes1, boxes2 = spojiDetekcije(contours1, contours2)
 
