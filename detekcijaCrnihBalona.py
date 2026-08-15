@@ -30,19 +30,38 @@ def nadjiCrno(img):
     #cv2.imshow("samo crno", samoCrno)
     cv2.imshow("detektovano", thresh)
 
-    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    distTransform = cv2.distanceTransform(thresh, cv2.DIST_L2, 5)
+    granica, sureForeGround = cv2.threshold(distTransform, 0.3 * distTransform.max(), 255, 0)
+    sureForeGround = np.uint8(sureForeGround)
+    cv2.imshow("sure_fg", sureForeGround)
+
+    brojPovrsina, markers = cv2.connectedComponents(sureForeGround)
+    markers = markers + 1
+
+    unknown = cv2.subtract(thresh, sureForeGround)
+    cv2.imshow("unknown", unknown)
+    markers[unknown == 255] = 0
+
+    markers = cv2.watershed(img, markers)
+
+    imgSaGranicama = img.copy()
+    imgSaGranicama[markers == -1] = [0, 0, 255]
+    cv2.imshow("watershed granice", imgSaGranicama)
 
     boxes = []
-    for c in contours:
-        area = cv2.contourArea(c)
-        if area < 500:
-            continue
-        perimeter = cv2.arcLength(c, True)
-        if perimeter == 0:
-            continue
-        circularity = 4 * np.pi * (area / (perimeter ** 2))
-        if circularity > 0.01:
-            boxes.append(cv2.boundingRect(c))
+    for markerId in range(2, markers.max() + 1):
+        balonMask = np.uint8(markers == markerId) * 255
+        contours, hierarchy = cv2.findContours(balonMask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for c in contours:
+            area = cv2.contourArea(c)
+            if area < 500:
+                continue
+            perimeter = cv2.arcLength(c, True)
+            if perimeter == 0:
+                continue
+            circularity = 4 * np.pi * (area / (perimeter ** 2))
+            if circularity > 0.1:
+                boxes.append(cv2.boundingRect(c))
 
     return boxes
 
