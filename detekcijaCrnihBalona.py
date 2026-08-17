@@ -7,11 +7,10 @@ Green = (0, 255, 0)
 Red = (0, 0, 255)
 Pink = (255, 0, 255)
 
-def gamma_correction(img, gamma):
-    inv_gamma = 1.0 / gamma
-    table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in range(256)]).astype("uint8")
+def gammaCorrection(img, gamma):
+    invGamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** invGamma) * 255 for i in range(256)]).astype("uint8")
     return cv2.LUT(img, table)
-
 
 def nadjiCrno(img):
     #nzm dal je potreban blur ovde
@@ -28,7 +27,7 @@ def nadjiCrno(img):
     prag, thresh = cv2.threshold(v, 70, 255, cv2.THRESH_BINARY_INV)
     samoCrno = cv2.bitwise_and(img, img, mask=thresh)
     #cv2.imshow("samo crno", samoCrno)
-    cv2.imshow("detektovano", thresh)
+    cv2.imshow("detektovanoCrno", thresh)
 
     distTransform = cv2.distanceTransform(thresh, cv2.DIST_L2, 5)
     granica, sureForeGround = cv2.threshold(distTransform, 0.3 * distTransform.max(), 255, 0)
@@ -65,13 +64,12 @@ def nadjiCrno(img):
 
     return boxes
 
-
 def nadjiKonture(img):
     blur = cv2.GaussianBlur(img, (9, 9), 0)
     #cv2.imshow("blur", blur)
 
     edges = cv2.Canny(blur, 40, 80)
-    cv2.imshow("edges", edges)
+    #cv2.imshow("edges", edges)
 
     kernel = np.ones((9, 9), np.uint8)
     edges_dilated = cv2.dilate(edges, kernel, iterations=1)
@@ -133,7 +131,6 @@ def presek(boxA, boxB):
 
     return (interX1, interY1, interW, interH)
 
-
 def iou2(boxA, boxB):
     interX1, interY1, interW, interH = presek(boxA, boxB)
     interArea = interW * interH
@@ -178,51 +175,6 @@ def spojiDetekcije(boxes1, boxes2, boxes3):
 
     return potvrdjeni
 
-
 def putBoundingBox(img, boxes, color):
     for (x, y, w, h) in boxes:
         cv2.rectangle(img, (x, y), (x + w, y + h), color, 2)
-
-cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
-while True:
-    ret, img = cap.read()
-    if not ret:
-        break
-    corrected = gamma_correction(img, gamma=1)
-    cv2.imshow("corrected", corrected)
-
-    hsv = cv2.cvtColor(corrected, cv2.COLOR_BGR2HSV)
-    h, s, v = cv2.split(hsv)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(16, 16))
-    v_clahe = clahe.apply(v)
-    hsv_clahe = cv2.merge([h, s, v_clahe])
-    bgr_clahe = cv2.cvtColor(hsv_clahe, cv2.COLOR_HSV2BGR)
-    cv2.imshow("clahe", bgr_clahe)
-
-    boxes1 = nadjiCrno(bgr_clahe)
-    boxes2 = nadjiKonture(bgr_clahe)
-    boxes3 = nadjiKrugove(bgr_clahe)
-
-    potvrdjeneDetekcije = spojiDetekcije(boxes1, boxes2, boxes3)
-
-    img_prve = img.copy()
-    putBoundingBox(img_prve, boxes1, Blue)
-    cv2.imshow("prve", img_prve)
-
-    img_druge = img.copy()
-    putBoundingBox(img_druge, boxes2, Red)
-    cv2.imshow("druge", img_druge)
-
-    img_trece = img.copy()
-    putBoundingBox(img_trece, boxes3, Pink)
-    cv2.imshow("trece", img_trece)
-
-    img_rezultat = img.copy()
-    putBoundingBox(img_rezultat, potvrdjeneDetekcije, Green)
-    cv2.imshow("rezultat", img_rezultat)
-
-    if cv2.waitKey(1) & 0xFF == 27:
-        break
-
-cap.release()
-cv2.destroyAllWindows()
