@@ -8,6 +8,7 @@ def napraviTrack(box):
     track = {
         "id": nextId,
         "box": box,
+        "smoothBox": box,
         "uzastopniPogoci": 1,
         "uzastopniPromasaji": 0,
         "potvrdjen": False,
@@ -15,6 +16,14 @@ def napraviTrack(box):
     }
     nextId += 1
     return track
+
+def smoothBox(stariBox, noviBox, alpha=0.5):
+    x = alpha * noviBox[0] + (1 - alpha) * stariBox[0]
+    y = alpha * noviBox[1] + (1 - alpha) * stariBox[1]
+    w = alpha * noviBox[2] + (1 - alpha) * stariBox[2]
+    h = alpha * noviBox[3] + (1 - alpha) * stariBox[3]
+
+    return (int(x), int(y), int(w), int(h))
 
 def azurirajTrackove(trackovi, noveDetekcije, iouPrag=0.3, pragPotvrde=3, pragBrisanja=5):
     upareniTrackovi = set()
@@ -27,13 +36,14 @@ def azurirajTrackove(trackovi, noveDetekcije, iouPrag=0.3, pragPotvrde=3, pragBr
         for j, det in enumerate(noveDetekcije):
             if j in upareneDetekcije:
                 continue
-            trenutniIou = iou2(track["box"], det)
+            trenutniIou = iou2(track["smoothBox"], det)
             if trenutniIou > najboljiIou:
                 najboljiIou = trenutniIou
                 najboljiJ = j
 
         if najboljiJ != -1:
             track["box"] = noveDetekcije[najboljiJ]
+            track["smoothBox"] = smoothBox(track["smoothBox"], noveDetekcije[najboljiJ])
             track["uzastopniPogoci"] += 1
             track["uzastopniPromasaji"] = 0
 

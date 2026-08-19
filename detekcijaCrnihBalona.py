@@ -27,25 +27,30 @@ def nadjiCrno(img):
     prag, thresh = cv2.threshold(v, 70, 255, cv2.THRESH_BINARY_INV)
     samoCrno = cv2.bitwise_and(img, img, mask=thresh)
     #cv2.imshow("samo crno", samoCrno)
-    cv2.imshow("detektovanoCrno", thresh)
+    #cv2.imshow("detektovanoCrno", thresh)
 
     distTransform = cv2.distanceTransform(thresh, cv2.DIST_L2, 5)
     granica, sureForeGround = cv2.threshold(distTransform, 0.3 * distTransform.max(), 255, 0)
     sureForeGround = np.uint8(sureForeGround)
-    cv2.imshow("sure_fg", sureForeGround)
+    #cv2.imshow("sure_fg", sureForeGround)
 
     brojPovrsina, markers = cv2.connectedComponents(sureForeGround)
     markers = markers + 1
 
     unknown = cv2.subtract(thresh, sureForeGround)
-    cv2.imshow("unknown", unknown)
-    markers[unknown == 255] = 0
+    #cv2.imshow("unknown", unknown)
+
+    kernel2 = np.ones((5, 5), np.uint8)
+    edgesClosed = cv2.morphologyEx(unknown, cv2.MORPH_CLOSE, kernel2)
+    #cv2.imshow("edgesClosed", edgesClosed)
+
+    markers[edgesClosed == 255] = 0
 
     markers = cv2.watershed(img, markers)
 
     imgSaGranicama = img.copy()
     imgSaGranicama[markers == -1] = [0, 0, 255]
-    cv2.imshow("watershed granice", imgSaGranicama)
+    #cv2.imshow("watershed granice", imgSaGranicama)
 
     boxes = []
     for markerId in range(2, markers.max() + 1):
@@ -71,11 +76,15 @@ def nadjiKonture(img):
     edges = cv2.Canny(blur, 40, 80)
     #cv2.imshow("edges", edges)
 
-    kernel = np.ones((9, 9), np.uint8)
-    edges_dilated = cv2.dilate(edges, kernel, iterations=1)
-    cv2.imshow("edges_dilated", edges_dilated)
+    kernel = np.ones((7, 7), np.uint8)
+    edgesDilated = cv2.dilate(edges, kernel, iterations=1)
+    #cv2.imshow("edgesDilated", edgesDilated)
 
-    contours, hierarchy = cv2.findContours(edges_dilated, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    kernel2 = np.ones((13, 13), np.uint8)
+    edgesClosed = cv2.morphologyEx(edgesDilated, cv2.MORPH_CLOSE, kernel2)
+    #cv2.imshow("edgesClosed", edgesClosed)
+
+    contours, hierarchy = cv2.findContours(edgesClosed, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
     boxes = []
     for c in contours:
@@ -86,7 +95,7 @@ def nadjiKonture(img):
         if perimeter == 0:
             continue
         circularity = 4 * np.pi * (area / (perimeter ** 2))
-        if circularity > 0.7:
+        if circularity > 0.5:
             boxes.append(cv2.boundingRect(c))
 
     return boxes
@@ -95,9 +104,9 @@ def nadjiKrugove(img):
     grayFrame = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurFrame = cv2.GaussianBlur(grayFrame, (11, 11), 0)
 
-    circles = cv2.HoughCircles(blurFrame, cv2.HOUGH_GRADIENT, 1.2, 100,
-                              param1=60, param2=80, minRadius=5, maxRadius=0)
-    # param1 je sensitivity, veci broj znaci manje krugova nadje
+    circles = cv2.HoughCircles(blurFrame, cv2.HOUGH_GRADIENT, 1.2, 50,
+                              param1=60, param2=80, minRadius=5, maxRadius=300)
+    # param1 je sensitivity, visi prag Canny, veci broj znaci manje krugova
     # param2 je accuracy, number of edge points needed, veci broj znaci manje krugova
     boxes = []
     if circles is not None:

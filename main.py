@@ -52,7 +52,7 @@ while True:
     for track in trackovi:
         if not track["potvrdjen"]:
             continue
-        x, y, w, h = track["box"]
+        x, y, w, h = track["smoothBox"]
         cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
         cv2.putText(img, f"ID {track['potvrdjenID']}", (x, y - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
