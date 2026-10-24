@@ -12,6 +12,9 @@ def gammaCorrection(img, gamma):
     table = np.array([((i / 255.0) ** invGamma) * 255 for i in range(256)]).astype("uint8")
     return cv2.LUT(img, table)
 
+def scoreTamno(meanV, prag=70, nagib=15):
+    return 1 / (1 + np.exp((meanV - prag) / nagib))
+
 def nadjiCrno(img):
     #nzm dal je potreban blur ovde
     blur = cv2.GaussianBlur(img, (3, 3), 0)
@@ -24,7 +27,7 @@ def nadjiCrno(img):
     #plt.plot(histogram)
     #plt.show()
 
-    prag, thresh = cv2.threshold(v, 70, 255, cv2.THRESH_BINARY_INV)
+    prag, thresh = cv2.threshold(v, 110, 255, cv2.THRESH_BINARY_INV)
     samoCrno = cv2.bitwise_and(img, img, mask=thresh)
     #cv2.imshow("samo crno", samoCrno)
     #cv2.imshow("detektovanoCrno", thresh)
@@ -60,12 +63,14 @@ def nadjiCrno(img):
             area = cv2.contourArea(c)
             if area < 500:
                 continue
-            perimeter = cv2.arcLength(c, True)
-            if perimeter == 0:
-                continue
-            circularity = 4 * np.pi * (area / (perimeter ** 2))
-            if circularity > 0.1:
-                boxes.append(cv2.boundingRect(c))
+
+            maskC = np.zeros(v.shape, np.uint8)
+            cv2.drawContours(maskC, [c], -1, 255, -1)
+            meanV = cv2.mean(v, mask=maskC)[0]
+
+            skor = scoreTamno(meanV)
+
+            boxes.append((cv2.boundingRect(c), skor))
 
     return boxes
 
@@ -95,8 +100,8 @@ def nadjiKonture(img):
         if perimeter == 0:
             continue
         circularity = 4 * np.pi * (area / (perimeter ** 2))
-        if circularity > 0.5:
-            boxes.append(cv2.boundingRect(c))
+
+        boxes.append((cv2.boundingRect(c), circularity))
 
     return boxes
 
@@ -111,14 +116,15 @@ def nadjiKrugove(img):
     boxes = []
     if circles is not None:
         circles = np.uint16(np.around(circles))
+        height, width = img.shape[:2]
         for i in circles[0, :]:
             x, y, r = int(i[0]), int(i[1]), int(i[2])
-            height, width = img.shape[:2]
 
             x1 = np.clip(x - r, 0, width)
             y1 = np.clip(y - r, 0, height)
-            x2 = np.clip(x + r, 0, width)
-            y2 = np.clip(y + r, 0, height)
+            #x2 = np.clip(x + r, 0, width)
+            #y2 = np.clip(y + r, 0, height)
+
             boxes.append((x1, y1, 2*r, 2*r))
     return boxes
 
@@ -187,3 +193,44 @@ def spojiDetekcije(boxes1, boxes2, boxes3):
 def putBoundingBox(img, boxes, color):
     for (x, y, w, h) in boxes:
         cv2.rectangle(img, (x, y), (x + w, y + h), color, 2)
+
+def fuzijaDetekcija(crno, konture, krugovi, tezine=(0.4, 0.4, 0.2),
+                    iouPrag=0.3, finalniPrag=0.5):
+    izvori = [crno, konture, [(box, 1.0) for box in krugovi]]
+
+    sve = []
+    for idx, lista in enumerate(izvori):
+        for box, skor in lista:
+            sve.append((box, skor, idx))
+
+    redosled = sorted(range(len(sve)), key=lambda i: sve[i][1], reverse=True)
+
+    iskoriscen = set()
+    potvrdjeni = []
+
+    for i in redosled:
+        if i in iskoriscen:
+            continue
+
+        boxA, skorA, izvorA = sve[i]
+        iskoriscen.add(i)
+        grupa = {izvorA: (boxA, skorA)}
+
+        for j in redosled:
+            if j in iskoriscen:
+                continue
+            boxB, skorB, izvorB = sve[j]
+            if izvorB in grupa:
+                continue
+            if iou2(boxA, boxB) > iouPrag:
+                grupa[izvorB] = (boxB, skorB)
+                iskoriscen.add(j)
+
+        finalniSkor = sum(tezine[izvor] * skor for izvor, (box, skor) in grupa.items())
+
+        if len(grupa) >= 2 and finalniSkor > finalniPrag:
+            kandidati = [(box, skor) for izvor, (box, skor) in grupa.items() if izvor != 2]
+            najboljiBox = max(kandidati, key=lambda k: k[1])[0]
+            potvrdjeni.append(najboljiBox)
+
+    return potvrdjeni
